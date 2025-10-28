@@ -1,22 +1,125 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
-	"github.com/jekabso21/IoT-Dashboard/backend/internal/api"
+	"github.com/jekabso21/IoT-Dashboard/backend/internal/config"
+	"github.com/jekabso21/IoT-Dashboard/backend/internal/logger"
+	"github.com/jekabso21/IoT-Dashboard/backend/internal/middleware as customMiddleware"
+	"github.com/jekabso21/IoT-Dashboard/backend/internal/routes"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
 func main() {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Welcome to the IoT Backend!")
-	})
-	// New API route
-	http.HandleFunc("/api/device-data", api.DeviceDataHandler)
+	// Load configuration
+	if err := config.Load(); err != nil {
+		logger.Fatal("Failed to load configuration:", err)
+	}
 
-	fmt.Println("Starting server at :8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
+	// Create Echo instance
+	e := echo.New()
+
+	// Hide Echo banner
+	e.HideBanner = true
+
+	// Setup global middleware
+	setupGlobalMiddleware(e)
+
+	// Setup routes
+	routes.SetupRoutes(e)
+
+	// Start server
+	serverAddr := fmt.Sprintf("%s:%s", config.AppConfig.Server.Host, config.AppConfig.Server.Port)
+
+	logger.WithFields(map[string]interface{}{
+		"host": config.AppConfig.Server.Host,
+		"port": config.AppConfig.Server.Port,
+	}).Info("Starting IoT Dashboard API server")
+
+	// Start server in a goroutine
+	go func() {
+		if err := e.Start(serverAddr); err != nil && err != http.ErrServerClosed {
+			logger.Fatal("Failed to start server:", err)
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	<-quit
+
+	logger.Info("Shutting down server...")
+
+	// Graceful shutdown with 30 second timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := e.Shutdown(ctx); err != nil {
+		logger.Fatal("Server forced to shutdown:", err)
+	}
+
+	logger.Info("Server exited")
+}
+
+func setupGlobalMiddleware(e *echo.Echo) {
+	// Request ID middleware
+	e.Use(customMiddleware.RequestID())
+
+	// Recovery middleware
+	e.Use(customMiddleware.Recovery())
+
+	// Security middleware
+	e.Use(customMiddleware.Security())
+
+	// CORS middleware
+	e.Use(customMiddleware.CORS())
+
+	// Request logging middleware
+	e.Use(customMiddleware.Logger())
+
+	// Rate limiting middleware
+	e.Use(customMiddleware.RateLimit())
+
+	// Timeout middleware
+	e.Use(customMiddleware.Timeout())
+
+	// Body limit middleware
+	e.Use(middleware.BodyLimit("10MB"))
+
+	// Gzip compression
+	e.Use(middleware.Gzip())
+
+	// Custom error handler
+	e.HTTPErrorHandler = customErrorHandler
+}
+
+func customErrorHandler(err error, c echo.Context) {
+	code := http.StatusInternalServerError
+	message := "Internal Server Error"
+
+	if he, ok := err.(*echo.HTTPError); ok {
+		code = he.Code
+		message = he.Message.(string)
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"error":  err.Error(),
+		"path":   c.Request().URL.Path,
+		"method": c.Request().Method,
+		"status": code,
+	}).Error("HTTP Error")
+
+	if !c.Response().Committed {
+		c.JSON(code, map[string]interface{}{
+			"success": false,
+			"error":   message,
+		})
 	}
 }
