@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jekabso21/IoT-Dashboard/backend/internal/config"
 	"github.com/jekabso21/IoT-Dashboard/backend/internal/logger"
 	"github.com/labstack/echo/v4"

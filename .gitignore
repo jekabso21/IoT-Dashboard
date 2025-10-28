@@ -134,3 +134,16 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+
+# Executables and Binaries
+.exe
+.bin
+
+# Backend
+backend/bin/
+backend/dist/
+backend/build/
+backend/vendor/
+backend/tmp/
+backend/tmp/
