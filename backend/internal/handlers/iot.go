@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/jekabso21/IoT-Dashboard/backend/internal/logger"
 	"github.com/jekabso21/IoT-Dashboard/backend/internal/models"
@@ -24,6 +25,13 @@ func (h *IoTHandler) SendSensorData(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Error:   "Invalid request body",
+		})
+	}
+
+	if strings.TrimSpace(req.DeviceID) == "" {
+		return c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error:   "device_id is required",
 		})
 	}
 
@@ -86,6 +94,13 @@ func (h *IoTHandler) UpdateDeviceStatus(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Error:   "Invalid request body",
+		})
+	}
+
+	if strings.TrimSpace(req.Status) == "" {
+		return c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error:   "status is required",
 		})
 	}
 

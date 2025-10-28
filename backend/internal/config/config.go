@@ -9,10 +9,11 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	JWT      JWTConfig
-	CORS     CORSConfig
+	Server    ServerConfig
+	Database  DatabaseConfig
+	JWT       JWTConfig
+	CORS      CORSConfig
+	RateLimit RateLimitConfig
 }
 
 type ServerConfig struct {
@@ -38,6 +39,12 @@ type CORSConfig struct {
 	AllowedOrigins []string
 	AllowedMethods []string
 	AllowedHeaders []string
+}
+
+type RateLimitConfig struct {
+	Rate      int
+	Burst     int
+	ExpiresIn int // in seconds
 }
 
 var AppConfig *Config
@@ -73,6 +80,11 @@ func Load() error {
 			},
 			AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 			AllowedHeaders: []string{"*"},
+		},
+		RateLimit: RateLimitConfig{
+			Rate:      getEnvAsInt("RATE_LIMIT_RATE", 10),
+			Burst:     getEnvAsInt("RATE_LIMIT_BURST", 20),
+			ExpiresIn: getEnvAsInt("RATE_LIMIT_EXPIRES_IN", 180), // 3 minutes
 		},
 	}
 

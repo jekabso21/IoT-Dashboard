@@ -15,6 +15,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/time/rate"
 )
 
 func CORS() echo.MiddlewareFunc {
@@ -61,7 +62,19 @@ func Recovery() echo.MiddlewareFunc {
 }
 
 func RateLimit() echo.MiddlewareFunc {
-	return middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(10))
+	store := middleware.NewRateLimiterMemoryStoreWithConfig(
+		middleware.RateLimiterMemoryStoreConfig{
+			Rate:      rate.Limit(config.AppConfig.RateLimit.Rate),
+			Burst:     config.AppConfig.RateLimit.Burst,
+			ExpiresIn: time.Duration(config.AppConfig.RateLimit.ExpiresIn) * time.Second,
+		},
+	)
+	return middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+		Store: store,
+		IdentifierExtractor: func(c echo.Context) (string, error) {
+			return c.RealIP(), nil
+		},
+	})
 }
 
 func Security() echo.MiddlewareFunc {
