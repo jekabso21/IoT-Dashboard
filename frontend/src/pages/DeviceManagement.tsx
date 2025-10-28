@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useToast } from '../contexts/ToastContext';
 import { 
   Plus, 
   Search, 
-  Filter, 
   Grid3X3, 
   List, 
   Thermometer, 
@@ -13,7 +13,6 @@ import {
   AlertTriangle,
   Clock,
   Battery,
-  QrCode,
   X,
   Wifi,
   WifiOff
@@ -21,13 +20,16 @@ import {
 import { mockDevices } from '../data/mockData';
 
 export default function DeviceManagement() {
+  const { showSuccess } = useToast();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addMode, setAddMode] = useState<'manual' | 'qr'>('manual');
-  const [newDeviceId, setNewDeviceId] = useState('');
+  const [currentStep, setCurrentStep] = useState(1);
+  const [connectionPassword, setConnectionPassword] = useState('');
+  const [isConnected, setIsConnected] = useState(false);
+  const [deviceName, setDeviceName] = useState('');
 
   const filteredDevices = mockDevices.filter(device => {
     const matchesSearch = device.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -39,6 +41,45 @@ export default function DeviceManagement() {
   });
 
   const locations = [...new Set(mockDevices.map(device => device.location))];
+
+  const generateConnectionPassword = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let password = '';
+    const length = Math.floor(Math.random() * 3) + 6; // Random length between 6-8
+    for (let i = 0; i < length; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
+  };
+
+  const resetModalState = () => {
+    setShowAddModal(false);
+    setCurrentStep(1);
+    setConnectionPassword('');
+    setIsConnected(false);
+    setDeviceName('');
+  };
+
+  const showSuccessNotification = (name: string) => {
+    showSuccess(`Device "${name}" added successfully!`);
+  };
+
+  useEffect(() => {
+    if (showAddModal && currentStep === 1 && !connectionPassword) {
+      const password = generateConnectionPassword();
+      setConnectionPassword(password);
+      setIsConnected(false);
+    }
+  }, [showAddModal, currentStep, connectionPassword]);
+
+  useEffect(() => {
+    if (connectionPassword && currentStep === 1) {
+      const timer = setTimeout(() => {
+        setIsConnected(true);
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [connectionPassword, currentStep]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -78,11 +119,10 @@ export default function DeviceManagement() {
   };
 
   const handleAddDevice = () => {
-    // Simulate adding device
-    console.log('Adding device:', newDeviceId);
-    setShowAddModal(false);
-    setNewDeviceId('');
-    setAddMode('manual');
+    if (deviceName.trim()) {
+      showSuccessNotification(deviceName);
+      resetModalState();
+    }
   };
 
   return (
@@ -350,83 +390,88 @@ export default function DeviceManagement() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-secondary rounded-lg p-6 w-full max-w-md">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-primary">Add New Device</h2>
+              <h2 className="text-xl font-semibold text-primary">
+                {currentStep === 1 ? 'Device Connection' : 'Name Your Device'}
+              </h2>
               <button
-                onClick={() => setShowAddModal(false)}
+                onClick={resetModalState}
                 className="text-secondary hover:text-primary"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
 
-            {/* Mode Selection */}
-            <div className="flex bg-elevated rounded-lg p-1 mb-6">
-              <button
-                onClick={() => setAddMode('manual')}
-                className={`flex-1 py-2 px-4 rounded text-sm font-medium transition-colors ${
-                  addMode === 'manual' ? 'bg-accent text-primary' : 'text-secondary hover:text-primary'
-                }`}
-              >
-                Manual Entry
-              </button>
-              <button
-                onClick={() => setAddMode('qr')}
-                className={`flex-1 py-2 px-4 rounded text-sm font-medium transition-colors ${
-                  addMode === 'qr' ? 'bg-accent text-primary' : 'text-secondary hover:text-primary'
-                }`}
-              >
-                QR Code
-              </button>
-            </div>
-
-            {addMode === 'manual' ? (
+            {/* Step 1 - Connection Password Display */}
+            {currentStep === 1 && (
               <div className="space-y-4">
-                <div className="form-group">
-                  <label className="form-label">Device ID</label>
-                  <input
-                    type="text"
-                    value={newDeviceId}
-                    onChange={(e) => setNewDeviceId(e.target.value)}
-                    placeholder="Enter device ID (e.g., ECO-001)"
-                    className="form-input"
-                  />
+                <div className="text-center">
+                  <div className="bg-elevated rounded-lg p-4 mb-4">
+                    <p className="text-sm text-secondary mb-2">Connection Password</p>
+                    <div className="font-mono text-2xl font-bold text-primary tracking-wider">
+                      {connectionPassword}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-center gap-2 mt-4">
+                    {isConnected ? (
+                      <>
+                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                        <span className="text-green-500">Connected</span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-3 h-3 rounded-full bg-gray-500 animate-pulse"></div>
+                        <span className="text-secondary">Waiting for connection...</span>
+                      </>
+                    )}
+                  </div>
                 </div>
+                
                 <div className="flex gap-3">
                   <button
-                    onClick={() => setShowAddModal(false)}
+                    onClick={resetModalState}
                     className="btn btn-secondary flex-1"
                   >
                     Cancel
                   </button>
                   <button
-                    onClick={handleAddDevice}
-                    disabled={!newDeviceId.trim()}
+                    onClick={() => setCurrentStep(2)}
+                    disabled={!isConnected}
                     className="btn btn-primary flex-1"
                   >
-                    Add Device
+                    Continue
                   </button>
                 </div>
               </div>
-            ) : (
-              <div className="text-center space-y-4">
-                <div className="w-32 h-32 bg-elevated rounded-lg flex items-center justify-center mx-auto">
-                  <QrCode className="w-16 h-16 text-secondary" />
+            )}
+
+            {/* Step 2 - Device Name Input */}
+            {currentStep === 2 && (
+              <div className="space-y-4">
+                <div className="form-group">
+                  <label className="form-label">Device Name</label>
+                  <input
+                    type="text"
+                    value={deviceName}
+                    onChange={(e) => setDeviceName(e.target.value)}
+                    placeholder="Enter device name (e.g., Living Room Sensor)"
+                    className="form-input"
+                  />
                 </div>
-                <p className="text-secondary">
-                  Position the QR code within the frame to scan
-                </p>
+                
                 <div className="flex gap-3">
                   <button
-                    onClick={() => setShowAddModal(false)}
+                    onClick={() => setCurrentStep(1)}
                     className="btn btn-secondary flex-1"
                   >
-                    Cancel
+                    Back
                   </button>
                   <button
                     onClick={handleAddDevice}
+                    disabled={!deviceName.trim()}
                     className="btn btn-primary flex-1"
                   >
-                    Simulate Scan
+                    Add Device
                   </button>
                 </div>
               </div>

@@ -38,6 +38,8 @@ p { font-size: 1rem; line-height: 1.6; }
 .text-error { color: #f44336; }
 .text-accent { color: #00e5ff; }
 
+.border-accent { border-color: #00e5ff; }
+
 .bg-primary { background-color: #121212; }
 .bg-secondary { background-color: #1e1e1e; }
 .bg-elevated { background-color: #2d2d2d; }
@@ -333,6 +335,12 @@ p { font-size: 1rem; line-height: 1.6; }
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Toast container widths */
+.toast-container {
+  min-width: 300px;
+  max-width: 400px;
 }
 
 /* Custom scrollbar */
