@@ -1,10 +1,15 @@
 package middleware
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt"
 	"github.com/jekabso21/IoT-Dashboard/backend/internal/config"
 	"github.com/jekabso21/IoT-Dashboard/backend/internal/logger"
 	"github.com/labstack/echo/v4"
@@ -56,19 +61,7 @@ func Recovery() echo.MiddlewareFunc {
 }
 
 func RateLimit() echo.MiddlewareFunc {
-	return middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
-		Rate:  10, // requests per second
-		Burst: 20, // burst size
-		KeyGenerator: func(c echo.Context) string {
-			return c.RealIP()
-		},
-		ErrorHandler: func(c echo.Context, err error) error {
-			return c.JSON(http.StatusTooManyRequests, map[string]interface{}{
-				"success": false,
-				"error":   "Rate limit exceeded",
-			})
-		},
-	})
+	return middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(10))
 }
 
 func Security() echo.MiddlewareFunc {
@@ -167,28 +160,152 @@ func generateRequestID() string {
 }
 
 func randomString(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[time.Now().UnixNano()%int64(len(charset))]
+	// Generate cryptographically secure random bytes
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		// Fail-safe: log error and return a fallback ID
+		logger.WithField("error", err).Error("Failed to generate secure random string")
+		return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
 	}
-	return string(b)
+	// Convert to hex string (2 chars per byte)
+	return hex.EncodeToString(bytes)[:length]
 }
 
 func isValidDeviceToken(token string) bool {
-	// TODO: Implement proper device token validation
-	// For now, accept any non-empty token
-	return len(token) > 0
+	if len(token) == 0 {
+		return false
+	}
+
+	// Check for demo mode
+	if os.Getenv("DEMO_AUTH") != "" {
+		return strings.HasPrefix(token, "demo-")
+	}
+
+	// Check if JWT secret is properly configured
+	if config.AppConfig.JWT.SecretKey == "your-secret-key" || config.AppConfig.JWT.SecretKey == "" {
+		env := os.Getenv("APP_ENV")
+		if env == "production" || env == "staging" {
+			logger.Warn("Device token validation rejected - JWT secret not configured in production")
+			return false
+		}
+		logger.Warn("Device token validation using default JWT secret - not secure for production")
+	}
+
+	// Production mode: validate JWT signature and claims
+	parsedToken, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
+		// Validate signing method
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return []byte(config.AppConfig.JWT.SecretKey), nil
+	})
+
+	if err != nil {
+		logger.WithField("error", err).Debug("Device token validation failed")
+		return false
+	}
+
+	// Check if token is valid and not expired
+	if !parsedToken.Valid {
+		return false
+	}
+
+	// Validate claims
+	if claims, ok := parsedToken.Claims.(jwt.MapClaims); ok {
+		// Check if subject exists
+		if _, exists := claims["sub"]; !exists {
+			return false
+		}
+		// Check if role exists and is device
+		if role, exists := claims["role"]; !exists || role != "device" {
+			return false
+		}
+	}
+
+	return true
 }
 
 func isValidAPIKey(apiKey string) bool {
-	// TODO: Implement proper API key validation
-	// For now, accept any non-empty API key
-	return len(apiKey) > 0
+	if len(apiKey) == 0 {
+		return false
+	}
+
+	// Check for demo mode
+	if os.Getenv("DEMO_AUTH") != "" {
+		return strings.HasPrefix(apiKey, "demo-")
+	}
+
+	// In production, reject API key validation until database layer is implemented
+	// This prevents accidental deployment with insecure API key validation
+	env := os.Getenv("APP_ENV")
+	if env == "production" || env == "staging" {
+		logger.WithField("api_key_prefix", apiKey[:min(8, len(apiKey))]).Warn("API key validation not implemented - rejecting in production")
+		return false
+	}
+
+	// Development mode: accept any non-empty API key with warning
+	logger.WithField("api_key_prefix", apiKey[:min(8, len(apiKey))]).Warn("API key validation not implemented - accepting in development")
+	return true
 }
 
 func isValidJWTToken(token string) bool {
-	// TODO: Implement proper JWT token validation
-	// For now, accept any non-empty token
-	return len(token) > 0
+	if len(token) == 0 {
+		return false
+	}
+
+	// Check for demo mode
+	if os.Getenv("DEMO_AUTH") != "" {
+		return strings.HasPrefix(token, "demo-")
+	}
+
+	// Check if JWT secret is properly configured
+	if config.AppConfig.JWT.SecretKey == "your-secret-key" || config.AppConfig.JWT.SecretKey == "" {
+		env := os.Getenv("APP_ENV")
+		if env == "production" || env == "staging" {
+			logger.Warn("JWT token validation rejected - JWT secret not configured in production")
+			return false
+		}
+		logger.Warn("JWT token validation using default JWT secret - not secure for production")
+	}
+
+	// Production mode: validate JWT signature and claims
+	parsedToken, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
+		// Validate signing method
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return []byte(config.AppConfig.JWT.SecretKey), nil
+	})
+
+	if err != nil {
+		logger.WithField("error", err).Debug("JWT validation failed")
+		return false
+	}
+
+	// Check if token is valid and not expired
+	if !parsedToken.Valid {
+		return false
+	}
+
+	// Validate claims
+	if claims, ok := parsedToken.Claims.(jwt.MapClaims); ok {
+		// Check if subject exists
+		if _, exists := claims["sub"]; !exists {
+			return false
+		}
+		// Check if role exists
+		if _, exists := claims["role"]; !exists {
+			return false
+		}
+	}
+
+	return true
+}
+
+// min returns the smaller of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

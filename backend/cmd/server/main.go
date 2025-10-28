@@ -11,10 +11,11 @@ import (
 
 	"github.com/jekabso21/IoT-Dashboard/backend/internal/config"
 	"github.com/jekabso21/IoT-Dashboard/backend/internal/logger"
-	"github.com/jekabso21/IoT-Dashboard/backend/internal/middleware as customMiddleware"
+	customMiddleware "github.com/jekabso21/IoT-Dashboard/backend/internal/middleware"
 	"github.com/jekabso21/IoT-Dashboard/backend/internal/routes"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
@@ -38,7 +39,7 @@ func main() {
 	// Start server
 	serverAddr := fmt.Sprintf("%s:%s", config.AppConfig.Server.Host, config.AppConfig.Server.Port)
 
-	logger.WithFields(map[string]interface{}{
+	logger.WithFields(logrus.Fields{
 		"host": config.AppConfig.Server.Host,
 		"port": config.AppConfig.Server.Port,
 	}).Info("Starting IoT Dashboard API server")
@@ -106,10 +107,14 @@ func customErrorHandler(err error, c echo.Context) {
 
 	if he, ok := err.(*echo.HTTPError); ok {
 		code = he.Code
-		message = he.Message.(string)
+		if msg, ok := he.Message.(string); ok {
+			message = msg
+		} else {
+			message = fmt.Sprintf("%v", he.Message)
+		}
 	}
 
-	logger.WithFields(map[string]interface{}{
+	logger.WithFields(logrus.Fields{
 		"error":  err.Error(),
 		"path":   c.Request().URL.Path,
 		"method": c.Request().Method,

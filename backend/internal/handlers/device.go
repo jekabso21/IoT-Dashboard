@@ -7,6 +7,7 @@ import (
 	"github.com/jekabso21/IoT-Dashboard/backend/internal/logger"
 	"github.com/jekabso21/IoT-Dashboard/backend/internal/models"
 	"github.com/labstack/echo/v4"
+	"github.com/sirupsen/logrus"
 )
 
 type DeviceHandler struct {
@@ -78,6 +79,15 @@ func (h *DeviceHandler) CreateDevice(c echo.Context) error {
 		})
 	}
 
+	// Validate the request using struct tags
+	if err := c.Validate(&req); err != nil {
+		logger.WithField("error", err).Error("Device creation request validation failed")
+		return c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error:   "Validation failed: " + err.Error(),
+		})
+	}
+
 	logger.WithField("device_name", req.Name).Info("Creating device")
 
 	// TODO: Implement database insert
@@ -144,7 +154,7 @@ func (h *DeviceHandler) GetDeviceData(c echo.Context) error {
 		}
 	}
 
-	logger.WithFields(map[string]interface{}{
+	logger.WithFields(logrus.Fields{
 		"device_id": deviceID,
 		"limit":     limit,
 	}).Info("Getting device data")

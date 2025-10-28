@@ -6,6 +6,7 @@ import (
 	"github.com/jekabso21/IoT-Dashboard/backend/internal/logger"
 	"github.com/jekabso21/IoT-Dashboard/backend/internal/models"
 	"github.com/labstack/echo/v4"
+	"github.com/sirupsen/logrus"
 )
 
 type IoTHandler struct {
@@ -26,7 +27,7 @@ func (h *IoTHandler) SendSensorData(c echo.Context) error {
 		})
 	}
 
-	logger.WithFields(map[string]interface{}{
+	logger.WithFields(logrus.Fields{
 		"device_id":   req.DeviceID,
 		"temperature": req.Temperature,
 		"humidity":    req.Humidity,
@@ -88,7 +89,7 @@ func (h *IoTHandler) UpdateDeviceStatus(c echo.Context) error {
 		})
 	}
 
-	logger.WithFields(map[string]interface{}{
+	logger.WithFields(logrus.Fields{
 		"device_id": deviceID,
 		"status":    req.Status,
 	}).Info("Updating device status")
@@ -146,7 +147,7 @@ func (h *IoTHandler) SendCommandResponse(c echo.Context) error {
 		})
 	}
 
-	logger.WithFields(map[string]interface{}{
+	logger.WithFields(logrus.Fields{
 		"device_id":  deviceID,
 		"command_id": commandID,
 		"success":    req.Success,

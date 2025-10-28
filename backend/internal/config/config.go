@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 
@@ -73,6 +74,14 @@ func Load() error {
 			AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 			AllowedHeaders: []string{"*"},
 		},
+	}
+
+	// Require strong secrets in production-like environments
+	env := getEnv("APP_ENV", "development")
+	if env == "production" || env == "staging" {
+		if AppConfig.JWT.SecretKey == "your-secret-key" || AppConfig.JWT.SecretKey == "" {
+			return fmt.Errorf("JWT_SECRET must be set in %s environment", env)
+		}
 	}
 
 	return nil
