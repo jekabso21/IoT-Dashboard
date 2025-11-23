@@ -146,3 +146,9 @@ backend/dist/
 backend/build/
 backend/vendor/
 backend/tmp/
+
+# ESP32 / PlatformIO
+esp32/.pio/
+esp32/.vscode/
+esp32/lib/
+esp32/test/
