@@ -2,17 +2,11 @@ package routes
 
 import (
 	"github.com/jekabso21/IoT-Dashboard/backend/internal/handlers"
-	"github.com/jekabso21/IoT-Dashboard/backend/internal/middleware"
+	customMiddleware "github.com/jekabso21/IoT-Dashboard/backend/internal/middleware"
 	"github.com/labstack/echo/v4"
 )
 
 func SetupRoutes(e *echo.Echo) {
-	// Initialize handlers
-	deviceHandler := handlers.NewDeviceHandler()
-	iotHandler := handlers.NewIoTHandler()
-	authHandler := handlers.NewAuthHandler()
-
-	// Health check endpoint
 	e.GET("/health", func(c echo.Context) error {
 		return c.JSON(200, map[string]interface{}{
 			"status":  "healthy",
@@ -20,50 +14,31 @@ func SetupRoutes(e *echo.Echo) {
 		})
 	})
 
-	// API v1 group
-	v1 := e.Group("/api/v1")
+	api := e.Group("/api")
 
-	// Public routes (no authentication required)
-	public := v1.Group("/public")
-	public.POST("/auth/login", authHandler.Login)
-	public.POST("/auth/register", authHandler.Register)
+	// Auth routes (public - no middleware required)
+	auth := api.Group("/auth")
+	auth.POST("/register", handlers.Register)
+	auth.POST("/login", handlers.Login)
+	auth.POST("/logout", handlers.Logout)
 
-	// Web application routes (JWT authentication required)
-	web := v1.Group("/web")
-	web.Use(middleware.WebAuth())
+	// Auth routes (protected - require user auth)
+	authProtected := api.Group("/auth", customMiddleware.UserAuth())
+	authProtected.POST("/refresh", handlers.RefreshUserToken)
+	authProtected.GET("/me", handlers.GetCurrentUser)
 
-	// Authentication routes
-	web.POST("/auth/logout", authHandler.Logout)
-	web.GET("/auth/profile", authHandler.GetProfile)
-	web.PUT("/auth/profile", authHandler.UpdateProfile)
+	// Device routes (for ESP32 devices)
+	devices := api.Group("/devices")
+	devices.POST("/pair", handlers.PairDevice)
+	devices.POST("/token/refresh", handlers.RefreshDeviceToken, customMiddleware.DeviceAuth())
+	devices.POST("/data", handlers.IngestSensorData, customMiddleware.DeviceAuth())
 
-	// Device management routes
-	web.GET("/devices", deviceHandler.GetDevices)
-	web.GET("/devices/:id", deviceHandler.GetDevice)
-	web.POST("/devices", deviceHandler.CreateDevice)
-	web.PUT("/devices/:id", deviceHandler.UpdateDevice)
-	web.DELETE("/devices/:id", deviceHandler.DeleteDevice)
-	web.GET("/devices/:id/data", deviceHandler.GetDeviceData)
-
-	// IoT device routes (API key or device token authentication required)
-	iot := v1.Group("/iot")
-	iot.Use(middleware.IoTDeviceAuth())
-
-	// Sensor data endpoints
-	iot.POST("/data", iotHandler.SendSensorData)
-	iot.GET("/devices/:id/status", iotHandler.GetDeviceStatus)
-	iot.PUT("/devices/:id/status", iotHandler.UpdateDeviceStatus)
-	iot.GET("/devices/:id/commands", iotHandler.GetDeviceCommands)
-	iot.POST("/devices/:id/commands/:commandId/response", iotHandler.SendCommandResponse)
-
-	// Analytics and reporting routes (web authentication required)
-	analytics := v1.Group("/analytics")
-	analytics.Use(middleware.WebAuth())
-
-	// TODO: Add analytics endpoints
-	analytics.GET("/devices/:id/summary", func(c echo.Context) error {
-		return c.JSON(200, map[string]interface{}{
-			"message": "Analytics endpoint - to be implemented",
-		})
-	})
+	// User routes (protected - require user auth)
+	user := api.Group("/user", customMiddleware.UserAuth())
+	user.POST("/pairing/generate", handlers.GeneratePairingCode)
+	user.GET("/devices", handlers.GetUserDevices)
+	user.GET("/devices/:id", handlers.GetDevice)
+	user.PUT("/devices/:id", handlers.UpdateDevice)
+	user.DELETE("/devices/:id", handlers.DeleteDevice)
+	user.GET("/sensor-data", handlers.GetSensorData)
 }
